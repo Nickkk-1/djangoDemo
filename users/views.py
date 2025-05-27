@@ -1,7 +1,8 @@
 # users/views.py
-from django.contrib.auth.models import Permission
+
+from django.contrib.auth.models import update_last_login
 from django.shortcuts import render
-from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
@@ -11,14 +12,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .permissions import MenuObjectPermissions
 from .serializers import UserRegisterSerializer, UserLoginSerializer, UserSerializer, MenuSerializer, PasswordChangeSerializer
-from .models import Menu
+from .models import Menu, User
 
 
 def login_view(request):
     return render(request, 'login.html')
 
-
-
+# 用户注册
 class UserRegisterView(APIView):
     permission_classes = [AllowAny]  # 允许匿名访问
 
@@ -29,8 +29,34 @@ class UserRegisterView(APIView):
             return Response({"message": "注册成功"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+# 用户登录
+class UserLoginView(APIView):
+    permission_classes = [AllowAny]  # 允许匿名访问
 
 
+    def post(self, request):
+        serializer = UserLoginSerializer(data=request.data)
+        if serializer.is_valid():
+            username = serializer.validated_data['username']
+            password = serializer.validated_data['password']
+            user = authenticate(username=username, password=password)
+
+            if user is not None:
+                # 更新last_login字段
+                update_last_login(None, user)
+                # 生成JWT Token
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'user_id': user.id,
+                    'username': user.username,
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({"message": "用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# 修改密码
 class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -45,37 +71,37 @@ class PasswordChangeView(APIView):
             return Response({"message": "密码修改成功"})
         return Response(serializer.errors, status=400)
 
-
-class UserLoginView(APIView):
-    permission_classes = [AllowAny]  # 允许匿名访问
-
-    def post(self, request):
-        serializer = UserLoginSerializer(data=request.data)
-        if serializer.is_valid():
-            username = serializer.validated_data['username']
-            password = serializer.validated_data['password']
-            user = authenticate(username=username, password=password)
-
-            if user is not None:
-                # 生成JWT Token
-                refresh = RefreshToken.for_user(user)
-                return Response({
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                    'user_id': user.id,
-                    'username': user.username,
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({"message": "用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
+# 获取当前用户信息
 class UserInfoView(RetrieveAPIView):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
         return self.request.user
+
+
+# 获取所有用户信息
+# 1、判断登录得是否是admin用户，不是则返回"非admin用户无法查询所有用户信息"，是则正常返回
+# class UserAllInfoView(ListAPIView):
+#     serializer_class = UserSerializer
+#     permission_classes = [IsAdminUser]
+#
+#     def get_queryset(self):
+#         return User.objects.filter(is_active=True)
+
+class UserAllInfoView(APIView):
+    def get(self, request):
+        if not request.user.is_superuser:
+            return Response({"message": "无权限", "code": status.HTTP_200_OK})
+
+        user = User.objects.filter(is_active=True, is_superuser=False)
+
+        serializer = UserSerializer(user, many=True)
+
+        return Response(serializer.data)
+
+
+
 
 # GET + POST，返回列表或创建资源
 class MenuListCreateView(generics.ListCreateAPIView):

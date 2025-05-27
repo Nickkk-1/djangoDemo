@@ -1,14 +1,14 @@
 # users/urls.py
 from django.urls import path
 from .views import UserRegisterView, UserLoginView, UserInfoView, MenuListCreateView, MenuRetrieveUpdateDestroyView, \
-    MenuTreeView, UserPermissionView, login_view, PasswordChangeView
+    MenuTreeView, UserPermissionView, login_view, PasswordChangeView, UserAllInfoView
 
 urlpatterns = [
     path('register/', UserRegisterView.as_view(), name='user-register'),
     path('change/', PasswordChangeView.as_view(), name='user-register'),
     path('login/', UserLoginView.as_view(), name='user-login'),
     path('info/', UserInfoView.as_view(), name='user-info'),
-
+    path('all-info/', UserAllInfoView.as_view(), name='user-all-info'),
     path('menus/', MenuListCreateView.as_view(), name='menu-list-create'),
     path('menus/<int:pk>/', MenuRetrieveUpdateDestroyView.as_view(), name='menu-detail'),
     path('menus/tree/', MenuTreeView.as_view(), name='menu-tree'),
